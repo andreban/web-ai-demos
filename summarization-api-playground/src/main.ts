@@ -9,6 +9,7 @@ import './style.css'
 // leaving about 998 tokens for the input text. Each token corresponds, roughly, to about 4 characters, so 4,000
 // is used as a limit to warn the user that the content might be too long to summarize.
 const MAX_MODEL_CHARS = 4000;
+const WARN_NEAR_MAX_MODEL_CHARS = 3500;
 const inputTextArea = document.querySelector('#input') as HTMLTextAreaElement;
 const summaryTypeSelect = document.querySelector('#type') as HTMLSelectElement;
 const summaryFormatSelect = document.querySelector('#format') as HTMLSelectElement;
@@ -128,11 +129,18 @@ const initializeApplication = async () => {
 
   inputTextArea.addEventListener('input', () => {
     characterCountSpan.textContent = inputTextArea.value.length.toFixed();
+    const percentage = remap(
+        WARN_NEAR_MAX_MODEL_CHARS,
+        MAX_MODEL_CHARS,
+        0,
+        100,
+        inputTextArea.value.length,
+        true
+    );
+    characterCountSpan.style.color = `color-mix(in oklab, red ${percentage}%, green)`
     if (inputTextArea.value.length > MAX_MODEL_CHARS) {
-      characterCountSpan.classList.add('tokens-exceeded');
       characterCountExceededSpan.classList.remove('hidden');
     } else {
-      characterCountSpan.classList.remove('tokens-exceeded');
       characterCountExceededSpan.classList.add('hidden');
     }
     scheduleSummarization();
@@ -140,3 +148,46 @@ const initializeApplication = async () => {
 }
 
 initializeApplication();
+
+/** 
+ * Linear interopolation between min and max over t. If t is 0.0, min is returned. If t is 1.0,
+ * max is returned.
+ */
+function lerp(min: number, max: number, t: number): number {
+  return min + (max - min) * t; 
+}
+
+/**
+ * Reverse lep, given a min, max and a value, find the t value.
+ */ 
+function reverseLerp(min: number, max: number, value: number): number {
+  return (value - min) / (max - min)
+}
+
+/** 
+ * Clams a value between min and max. If value is smaller than min, min is returned. If value is
+ * larger than max, max is returned.
+ */
+function clamped(min: number, max: number, value: number): number {
+  return Math.max(Math.min(value, max), min);
+}
+
+/** 
+ * Remaps a value that is between fromMin and fromMax to a value between toMin and toMax, with
+ * the same proportion between the min and max values. Optionally clamps the returned value.
+ */ 
+function remap(
+    fromMin: number,
+    fromMax: number,
+    toMin: number,
+    toMax: number,
+    value: number,
+    clamp: boolean = false
+  ): number {
+  const t = reverseLerp(fromMin, fromMax, value);
+  const outValue = lerp(toMin, toMax, t);
+  if (clamp) {
+    return clamped(toMin, toMax, outValue);
+  }
+  return outValue;
+}
